@@ -181,6 +181,13 @@ def Pipelined(
         order = []
     if stage is None:
         stage = []
+    if len(order) != len(stage):
+        raise ValueError(
+            f"T.Pipelined requires order and stage to have the same length, got {len(order)} and {len(stage)}")
+    for name, seq in (("order", order), ("stage", stage)):
+        for entry in seq:
+            if isinstance(entry, int) and entry < 0:
+                raise ValueError(f"T.Pipelined {name} entries must be non-negative, got {entry}")
     if annotations is None:
         annotations: dict[str, Any] = {}
     # type: ignore[attr-defined] # pylint: disable=no-member
