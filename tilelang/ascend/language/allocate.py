@@ -24,6 +24,30 @@ def alloc_shared(shape: ShapeType, dtype: DType, scope="shared.dyn") -> Buffer:
     return _with_span(T.sblock_alloc_buffer(shape, dtype, scope=scope))
 
 
+# dav-3510 L1 (__cbuf__) capacity, matching the physical pool size used by
+# annotate_buffer_addresses.
+_L1_CAPACITY_BYTES = 512 * 1024
+
+
+def _validate_l1_capacity(shape: ShapeType, dtype: DType) -> None:
+    """Reject a statically sized L1 allocation that exceeds the hardware pool."""
+    if isinstance(shape, int):
+        shape = (shape,)
+    analyzer = arith.Analyzer()
+    extents = [analyzer.simplify(extent) for extent in shape]
+    if not extents or any(not isinstance(extent, IntImm) for extent in extents):
+        return
+    elements = 1
+    for extent in extents:
+        elements *= int(extent)
+    element = DataType(dtype)
+    total = elements * element.bits * element.lanes // 8
+    if total > _L1_CAPACITY_BYTES:
+        raise ValueError(
+            f"alloc_l1 exceeds the {_L1_CAPACITY_BYTES}-byte L1 capacity of the ascend target, got {total} bytes"
+        )
+
+
 def alloc_l1(shape: ShapeType, dtype: DType, scope="shared.l1") -> Buffer:
     """Allocate an L1 buffer (__cbuf__) on Ascend NPU.
 
@@ -32,6 +56,7 @@ def alloc_l1(shape: ShapeType, dtype: DType, scope="shared.l1") -> Buffer:
         dtype: Data type
         scope: Memory scope. Defaults to "shared.l1"
     """
+    _validate_l1_capacity(shape, dtype)
     return _with_span(T.sblock_alloc_buffer(shape, dtype, scope=scope))
 
 
