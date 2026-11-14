@@ -36,6 +36,21 @@ def _get_allocation_shape(buf: BufferLikeType) -> list:
     raise TypeError(f"Cannot get allocation shape from {type(buf)}")
 
 
+def _validate_region_offsets(region: BufferLikeType, name: str) -> None:
+    """Reject statically negative region start indices at the API boundary.
+
+    LegalizeNegativeIndex turns a region with a negative start into the whole
+    buffer, which silently changes what a partial copy moves. Copy regions must
+    start at a non-negative index.
+    """
+    if not isinstance(region, tirx.BufferRegion):
+        return
+    for r in region.region:
+        start = r.min
+        if isinstance(start, tirx.IntImm) and int(start) < 0:
+            raise ValueError(f"Ascend T.copy {name} region starts at a negative index {int(start)}; copy regions must be non-negative")
+
+
 def _is_half(full_dim, half_dim) -> bool:
     """Check whether full_dim is exactly twice half_dim."""
     if isinstance(full_dim, (int, tirx.IntImm)) and isinstance(half_dim, (int, tirx.IntImm)):
@@ -309,6 +324,8 @@ def copy(  # noqa: A001
     Returns:
         tirx.PrimExpr | tirx.Stmt: A handle to the copy operation.
     """
+    _validate_region_offsets(src, "source")
+    _validate_region_offsets(dst, "destination")
     if isinstance(src, tirx.Buffer) and isinstance(dst, tirx.Buffer):
         src_elems = prod(src.shape)
         dst_elems = prod(dst.shape)
