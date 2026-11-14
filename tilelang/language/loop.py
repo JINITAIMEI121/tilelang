@@ -10,6 +10,23 @@ from tilelang import _ffi_api
 from tvm.tirx.script.builder import frame
 
 
+def _static_int(value: Any) -> int | None:
+    """Return the Python int behind a static expression, or None when symbolic."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, IntImm):
+        return value.value
+    return None
+
+
+def _require_non_negative(value: Any, what: str) -> None:
+    static = _static_int(value)
+    if static is not None and static < 0:
+        raise ValueError(f"{what} must be non-negative, got {static}")
+
+
 def Parallel(
     *extents: int | tirx.PrimExpr,
     coalesced_width: int | None = None,
@@ -181,6 +198,11 @@ def Pipelined(
         order = []
     if stage is None:
         stage = []
+    if order and stage and len(order) != len(stage):
+        raise ValueError(f"T.Pipelined order/stage length mismatch: order has {len(order)} entries, stage has {len(stage)}")
+    for name, entries in (("order", order), ("stage", stage)):
+        for entry in entries:
+            _require_non_negative(entry, f"T.Pipelined {name} entry")
     if annotations is None:
         annotations: dict[str, Any] = {}
     # type: ignore[attr-defined] # pylint: disable=no-member
