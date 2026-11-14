@@ -10,6 +10,29 @@ from tilelang import _ffi_api
 from tvm.tirx.script.builder import frame
 
 
+def _static_int(value: Any) -> int | None:
+    """Return the Python int behind a static expression, or None when symbolic."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, IntImm):
+        return value.value
+    return None
+
+
+def _require_non_negative(value: Any, what: str) -> None:
+    static = _static_int(value)
+    if static is not None and static < 0:
+        raise ValueError(f"{what} must be non-negative, got {static}")
+
+
+def _require_positive(value: Any, what: str) -> None:
+    static = _static_int(value)
+    if static is not None and static <= 0:
+        raise ValueError(f"{what} must be positive, got {static}")
+
+
 def Parallel(
     *extents: int | tirx.PrimExpr,
     coalesced_width: int | None = None,
@@ -105,6 +128,10 @@ def Persistent(
         The number of pipeline stages for double buffering.
         If 0, pipeline is disabled.
     """
+    _require_positive(wave_size, "T.Persistent wave_size")
+    if group_size is not None:
+        _require_positive(group_size, "T.Persistent group_size")
+    _require_non_negative(num_stages, "T.Persistent num_stages")
     if annotations is None:
         annotations: dict[str, Any] = {}
     return _ffi_api.Persistent(domain, wave_size, index, group_size, num_stages, annotations)
