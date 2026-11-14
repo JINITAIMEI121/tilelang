@@ -10,6 +10,23 @@ from tilelang import _ffi_api
 from tvm.tirx.script.builder import frame
 
 
+def _static_int(value: Any) -> int | None:
+    """Return the Python int behind a static expression, or None when symbolic."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, IntImm):
+        return value.value
+    return None
+
+
+def _require_non_negative(value: Any, what: str) -> None:
+    static = _static_int(value)
+    if static is not None and static < 0:
+        raise ValueError(f"{what} must be non-negative, got {static}")
+
+
 def Parallel(
     *extents: int | tirx.PrimExpr,
     coalesced_width: int | None = None,
@@ -69,6 +86,8 @@ def Parallel(
     res : frame.ForFrame
         The ForFrame.
     """
+    for extent in extents:
+        _require_non_negative(extent, "T.Parallel extent")
     merged_annotations: dict[str, Any] = dict(annotations) if annotations is not None else {}
     coalesced_width = coalesced_width if coalesced_width is not None else merged_annotations.get("coalesced_width")
     if coalesced_width is not None:
@@ -220,6 +239,8 @@ def serial(
     step_is_one |= isinstance(step, int) and step == 1
     step_is_one |= isinstance(step, IntImm) and step.value == 1
     if step is None or step_is_one:
+        if stop is None:
+            _require_non_negative(start, "T.serial extent")
         return tb_tir.serial(start, stop, annotations=annotations)
     else:
         if stop is None:
@@ -265,6 +286,7 @@ def unroll(
 
     step_is_one = False
     if stop is None:
+        _require_non_negative(start, "T.unroll extent")
         stop = start
         if hasattr(start, "dtype"):
             start = IntImm(start.dtype, 0)
