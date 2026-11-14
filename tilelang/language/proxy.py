@@ -71,6 +71,27 @@ class BufferProxy:
         return match_buffer(pointer_var, shape, dtype=dtype, strides=strides)
 
 
+def _validate_tensor_shape(shape: ShapeType) -> None:
+    """Reject statically negative tensor dimensions before they reach TIR."""
+    if isinstance(shape, (int, PrimExpr)):
+        extents = (shape,)
+    elif isinstance(shape, (tuple, list)):
+        extents = shape
+    else:
+        return
+    for extent in extents:
+        if isinstance(extent, bool):
+            continue
+        if isinstance(extent, int):
+            value = extent
+        elif isinstance(extent, tirx.IntImm):
+            value = extent.value
+        else:
+            continue
+        if value < 0:
+            raise ValueError(f"T.Tensor dimensions must be non-negative, got {value}")
+
+
 def _normalize_tensor_dtype(dtype: DType) -> DType:
     # `T.Tensor(..., T.ptr)` is a frontend-only marker for pointer tables.
     # Keep the runtime ABI as int64 storage and rely on T.make_tensor(...)
@@ -106,6 +127,7 @@ class BaseTensorProxy:
         axis_separators=None,
     ) -> tirx.Buffer:
         # Use class defaults if not specified
+        _validate_tensor_shape(shape)
         dtype = _normalize_tensor_dtype(dtype)
         scope = scope or self.default_scope
         align = align or self.default_align
