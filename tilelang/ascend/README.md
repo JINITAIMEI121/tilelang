@@ -107,6 +107,11 @@ export TILELANG_EXECUTION_BACKEND=pto      # or: pto only (legacy Cython launche
 Cython launcher. It remains supported for compatibility, but new code should
 use `target="pto"`.
 
+> **Version note.** The PTO selections above are available in source builds
+> newer than the 0.1.15 PyPI release. On 0.1.15, `target="ascend"` accepts only
+> `execution_backend="tvm_ffi"` (default) and `"cython"`; passing `"pto"`
+> raises `ValueError: Invalid execution backend 'pto' for target 'ascend'`.
+
 The following example implements the same GEMM with a fused ReLU epilogue as
 the [main README](../../README.md#quick-start), while using Huawei Ascend 950
 features such as SIMT vector programming and direct Cube-to-Vector data
