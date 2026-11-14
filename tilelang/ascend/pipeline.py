@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from tvm import IRModule, s_tir, tirx
 from tvm.target import Target
+from tvm.tirx import PrimFunc, SBlock
+from tvm.tirx.stmt_functor import post_order_visit
 
 import tilelang
 from tilelang.backend.pass_pipeline import PassPipeline
@@ -32,6 +34,36 @@ def allow_autoschedule(pass_ctx=None) -> bool:
     if pass_ctx is None:
         pass_ctx = tilelang.transform.get_pass_context()
     return pass_ctx.config.get(tilelang.PassConfigKey.TL_ENABLE_AUTO_SCHEDULE, True)
+
+
+def _reject_float64_buffers(mod: IRModule) -> None:
+    """Reject float64 tensor buffers before device code generation.
+
+    bisheng rejects double precision operations inside aicore functions
+    (``double precision operation is not allowed in aicore function``), and the
+    failure otherwise surfaces only as an ERR99999 wrapper from the device
+    compiler. Catching the dtype here reports the unsupported input directly.
+    """
+
+    def check(buffer) -> None:
+        if str(buffer.dtype) == "float64":
+            raise ValueError(
+                f"Ascend does not support float64 buffer '{buffer.name}': bisheng rejects "
+                "double precision operations in aicore functions. Use float32 instead."
+            )
+
+    for _, func in mod.functions.items():
+        if not isinstance(func, PrimFunc):
+            continue
+        for _, buffer in func.buffer_map.items():
+            check(buffer)
+
+        def visit(node) -> None:
+            if isinstance(node, SBlock):
+                for buffer in node.alloc_buffers:
+                    check(buffer)
+
+        post_order_visit(func.body, visit)
 
 
 def AscendPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
@@ -140,6 +172,7 @@ def AscendPassPipelineBody(mod: IRModule, target: Target) -> IRModule:
         mod = ascend_transform.AscendSimdVFLowerParallel()(mod)
     mod = ascend_transform.AscendLowerTileOp()(mod)
     mod = tilelang.transform.VerifyReducerConsumed()(mod)
+    _reject_float64_buffers(mod)
 
     mod = tilelang.transform.DecoupleTypeCast()(mod)
     mod = tilelang.transform.LegalizeVectorizedLoop()(mod)
