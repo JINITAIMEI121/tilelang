@@ -2597,6 +2597,14 @@ void CodeGenTileLangAscend::VisitExpr_(const CallNode *op, std::ostream &os) {
       emit_ptr_and_val(this->stream);
       this->stream << ";\n";
     }
+  } else if (op->op.same_as(tl::atomic_load_elem_op()) ||
+             op->op.same_as(tl::atomic_store_elem_op()) ||
+             op->op.same_as(tl::atomic_or_elem_op()) ||
+             op->op.same_as(tl::atomic_addx2_elem_op()) ||
+             op->op.same_as(tl::atomic_addx4_elem_op())) {
+    ICHECK(false) << "T.atomic_load/T.atomic_store/T.atomic_or/"
+                     "T.atomic_addx2/T.atomic_addx4 are not supported on the "
+                     "Ascend backend";
   } else if (op->op.same_as(tl::rng_init())) {
     // Ascend SIMT Philox RNG. Must be used inside a T.SimtVF(...) block so it
     // compiles into a __simt_vf__ helper. args: seed, seq, off, generator.
