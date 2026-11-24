@@ -207,4 +207,22 @@ def gemm(
     ann: dict = dict(annotations) if annotations else {}
     if unit_flag_ctrl is not None:
         ann.setdefault("unit_flag_ctrl", unit_flag_ctrl)
+    # Ascend L0 GEMM lowering (GemmMad._compute_tile_k_sub) requires K to be
+    # divisible by c0 = 256 bits / elem_bits. Reject misaligned K here with a
+    # clear message instead of an internal assert deep in auto-schedule.
+    try:
+        _a_shape = retrieve_shape(_legalize_argument(A))
+        _a_dtype = _legalize_argument(A).dtype
+        _elem_bits = int(_a_dtype.bits)
+        _c0 = 256 // _elem_bits
+        _k_val = int(_a_shape[-2] if transpose_A else _a_shape[-1])
+        if _k_val % _c0 != 0:
+            raise ValueError(
+                f"T.gemm on Ascend requires K to be a multiple of {_c0} for "
+                f"{_a_dtype} inputs, got K = {_k_val}"
+            )
+    except ValueError:
+        raise
+    except Exception:
+        pass  # symbolic shapes: leave the check to the lowering
     return _dialect_gemm_call(A, B, C, transpose_A, transpose_B, policy, clear_accum, ann or None)
