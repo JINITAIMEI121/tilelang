@@ -209,7 +209,9 @@ def gemm(
     # asc_mmad overload and abort deep inside bisheng, so reject them here
     # with a clear message.
     for _name, _op in (("A", A), ("B", B)):
-        _scope = _legalize_argument(_op).scope()
+        _op = _legalize_argument(_op)
+        _op_buf = _op.buffer if isinstance(_op, tirx.BufferRegion) else _op
+        _scope = _op_buf.scope()
         if _scope in ("global", "gm"):
             raise ValueError(
                 f"T.gemm on Ascend requires L1-scope operands, got {_name} in "
