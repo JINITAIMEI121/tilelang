@@ -57,6 +57,15 @@ def reduce(
     # regions: no fragment exists inside SimdVF to round-trip through.
     if batch < 1:
         raise ValueError(f"batch must be >= 1, got {batch}")
+    # The SIMD reduction intrinsics (asc_reduce_sum/vmax/vmin) only have
+    # fp32/fp16 overloads. Reject unsupported dtypes here with a clear
+    # message instead of a deep device-compilation failure later.
+    _reduce_dtype = _get_buffer(buffer).dtype
+    if _reduce_dtype not in ("float32", "float16"):
+        raise ValueError(
+            f"T.reduce_{reduce_type} on the Ascend SimdVF path supports only "
+            f"float32/float16 input, got {_reduce_dtype}"
+        )
     out_buffer = to_buffer_region(out).buffer
     if reduce_type in ("bitand", "bitor", "bitxor"):
         buf_dtype = _get_buffer(buffer).dtype
