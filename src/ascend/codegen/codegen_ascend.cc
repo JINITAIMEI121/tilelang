@@ -2581,6 +2581,23 @@ void CodeGenTileLangAscend::VisitExpr_(const CallNode *op, std::ostream &os) {
     is_ret = op->op.same_as(tl::atomic_add_ret_elem_op()) ||
              op->op.same_as(tl::atomic_max_ret_elem_op()) ||
              op->op.same_as(tl::atomic_min_ret_elem_op());
+    // The Ascend SIMT device API (asc/impl/simt_api/
+    // device_atomic_functions_impl.h) only defines asc_atomic_{add,max,min}
+    // overloads for float16/bfloat16/float32 and 32/64-bit integers. Anything
+    // else (e.g. int8/uint8/float8) reaches bisheng and aborts with "no
+    // matching function", so reject it here with a clear message instead.
+    DataType atomic_val_dtype = op->args[1].dtype();
+    bool atomic_dtype_ok =
+        atomic_val_dtype.is_bfloat16() ||
+        (atomic_val_dtype.is_float() &&
+         (atomic_val_dtype.bits() == 16 || atomic_val_dtype.bits() == 32)) ||
+        ((atomic_val_dtype.is_int() || atomic_val_dtype.is_uint()) &&
+         (atomic_val_dtype.bits() == 32 || atomic_val_dtype.bits() == 64));
+    ICHECK(atomic_dtype_ok)
+        << "Ascend SIMT atomic_" << fn
+        << " supports only float16/bfloat16/float32/int32/uint32/int64/uint64 "
+        << "operands, got " << atomic_val_dtype
+        << " (see asc/impl/simt_api/device_atomic_functions_impl.h)";
     auto emit_ptr_and_val = [&](std::ostream &out) {
       // args[0] is address_of(BufferLoad); its codegen already emits a
       // correctly scoped, element-typed, offset pointer.
