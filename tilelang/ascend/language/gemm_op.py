@@ -139,6 +139,11 @@ def gemm_blockscaled(
 
     ann: dict = {}
     if unit_flag_ctrl is not None:
+        _uf = int(unit_flag_ctrl)
+        if _uf < 0 or _uf > 2:
+            raise ValueError(
+                f"T.gemm_blockscaled unit_flag_ctrl must be 0, 1 or 2 on Ascend, got {unit_flag_ctrl}"
+            )
         ann["unit_flag_ctrl"] = unit_flag_ctrl
     assert SFA is not None and SFB is not None, "block-scaled GEMM requires both SFA and SFB"
     call = _dialect_gemm_call(A, B, C, transpose_A, transpose_B, GemmWarpPolicy.Square, clear_accum, ann or None)
@@ -206,5 +211,10 @@ def gemm(
     """
     ann: dict = dict(annotations) if annotations else {}
     if unit_flag_ctrl is not None:
+        _uf = int(unit_flag_ctrl)
+        if _uf < 0 or _uf > 2:
+            raise ValueError(
+                f"T.gemm unit_flag_ctrl must be 0, 1 or 2 on Ascend, got {unit_flag_ctrl}"
+            )
         ann.setdefault("unit_flag_ctrl", unit_flag_ctrl)
     return _dialect_gemm_call(A, B, C, transpose_A, transpose_B, policy, clear_accum, ann or None)
