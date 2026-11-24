@@ -204,6 +204,17 @@ def gemm(
     Returns:
         tirx.PrimExpr: A handle to the GEMM operation.
     """
+    # Ascend L1 GEMM operands must live in L1 (shared) storage. GM-scope
+    # operands reach the MAD lowering as __gm__ pointers with no matching
+    # asc_mmad overload and abort deep inside bisheng, so reject them here
+    # with a clear message.
+    for _name, _op in (("A", A), ("B", B)):
+        _scope = _legalize_argument(_op).scope()
+        if _scope in ("global", "gm"):
+            raise ValueError(
+                f"T.gemm on Ascend requires L1-scope operands, got {_name} in "
+                f"{_scope} scope; copy it into an alloc_l1 buffer first"
+            )
     ann: dict = dict(annotations) if annotations else {}
     if unit_flag_ctrl is not None:
         ann.setdefault("unit_flag_ctrl", unit_flag_ctrl)
