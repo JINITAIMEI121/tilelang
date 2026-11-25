@@ -605,10 +605,32 @@ def vsubc(src0, src1, mask=None):
     return SimdPair(_bind(pair), ("boolx256", src0.dtype))
 
 
+def _validate_simd_arith_dtype(op_name, dtype):
+    """Reject operand dtypes that have no asc_* device overload.
+
+    Without this check the unsupported dtype reaches bisheng and aborts
+    with "no matching function for call to asc_*" (deep compiler crash).
+    """
+    dtype_str = str(dtype)
+    reject_bf16_fp8 = op_name in ("vabs", "vneg", "vdiv", "vmull", "vmula", "vmadd", "vaddcs")
+    reject_fp8 = reject_bf16_fp8 or op_name in ("vmin", "vmax", "vmaxs", "vmins")
+    if "float8" in dtype_str and reject_fp8:
+        raise ValueError(
+            f"T.simd.{op_name} on the Ascend SimdVF path does not support "
+            f"{dtype_str} operands"
+        )
+    if reject_bf16_fp8 and ("bfloat16" in dtype_str or dtype_str == "bf16"):
+        raise ValueError(
+            f"T.simd.{op_name} on the Ascend SimdVF path does not support "
+            f"bfloat16 operands"
+        )
+
+
 def vaddcs(src0, src1, carrysrcp, mask=None):
     """Add int32/uint32 with carry-in predicate and return ``(carry, result)``."""
     if mask is None:
         mask = _default_mask(src0.dtype)
+        _validate_simd_arith_dtype("vaddcs", src0.dtype)
 
     pair = tirx.call_intrin(str(src0.dtype), _Op("tl.simd.vaddcs"), src0, src1, carrysrcp, mask)
     if not IRBuilder.is_in_scope():
@@ -631,6 +653,7 @@ def vmull(src0, src1, mask=None):
     """Widening 32x32->64 multiply returning ``(lo, hi)`` (int32/uint32)."""
     if mask is None:
         mask = _default_mask(src0.dtype)
+        _validate_simd_arith_dtype("vmull", src0.dtype)
 
     pair = tirx.call_intrin(str(src0.dtype), _Op("tl.simd.vmull"), src0, src1, mask)
     if not IRBuilder.is_in_scope():
@@ -824,6 +847,9 @@ def vdiv(src0, src1, mask=None, mode="MODE_ZEROING", precision=None):
     """
     if mask is None:
         mask = _default_mask(src0.dtype)
+        _validate_simd_arith_dtype("vdiv", src0.dtype)
+        _validate_simd_arith_dtype("vmadd", src0.dtype)
+        _validate_simd_arith_dtype("vmula", src0.dtype)
     annotations = None
     if precision is not None:
         annotations = _precision_annotation("vdiv", precision, dtype=src0.dtype)
@@ -833,12 +859,14 @@ def vdiv(src0, src1, mask=None, mode="MODE_ZEROING", precision=None):
 def vmax(src0, src1, mask=None, mode="MODE_ZEROING"):  # noqa: A001
     if mask is None:
         mask = _default_mask(src0.dtype)
+        _validate_simd_arith_dtype("vmax", src0.dtype)
     return tirx.call_intrin(str(src0.dtype), _Op("tl.simd.vmax"), src0, src1, mask, mode)
 
 
 def vmin(src0, src1, mask=None, mode="MODE_ZEROING"):  # noqa: A001
     if mask is None:
         mask = _default_mask(src0.dtype)
+        _validate_simd_arith_dtype("vmin", src0.dtype)
     return tirx.call_intrin(str(src0.dtype), _Op("tl.simd.vmin"), src0, src1, mask, mode)
 
 
@@ -899,12 +927,14 @@ def vsqrt(src, mask=None, mode="MODE_ZEROING", precision=None):
 def vabs(src, mask=None, mode="MODE_ZEROING"):  # noqa: A001
     if mask is None:
         mask = _default_mask(src.dtype)
+        _validate_simd_arith_dtype("vabs", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vabs"), src, mask, mode)
 
 
 def vneg(src, mask=None, mode="MODE_ZEROING"):
     if mask is None:
         mask = _default_mask(src.dtype)
+        _validate_simd_arith_dtype("vneg", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vneg"), src, mask, mode)
 
 
@@ -1468,12 +1498,14 @@ def vselr(src, index):
 def vmaxs(src, scalar, mask=None, mode="MODE_ZEROING"):
     if mask is None:
         mask = _default_mask(src.dtype)
+        _validate_simd_arith_dtype("vmaxs", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vmaxs"), src, scalar, mask, mode)
 
 
 def vmins(src, scalar, mask=None, mode="MODE_ZEROING"):
     if mask is None:
         mask = _default_mask(src.dtype)
+        _validate_simd_arith_dtype("vmins", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vmins"), src, scalar, mask, mode)
 
 
