@@ -698,7 +698,42 @@ void CheckAllReduceDtype(const CallNode *call) {
          "finalized result afterward.";
 }
 
+// Detects tl::ascend_gemm_l1 / tl::ascend_blockscaled_gemm_l1 calls made
+// inside a SIMT_VF block. PTO lowers gemm to Cube instructions that cannot be
+// emitted from a SIMT body; without this check the failure only surfaces
+// during ptoas lowering with a cryptic error.
+class GemmInSimtVFChecker : public tirx::StmtExprVisitor {
+ public:
+  static void Check(const tirx::PrimFunc &func) {
+    GemmInSimtVFChecker checker;
+    checker(func->body);
+  }
+
+ private:
+  void VisitStmt_(const tirx::SBlockNode *op) final {
+    const bool is_simt = (op->name_hint == "SIMT_VF");
+    if (is_simt) {
+      ++simt_depth_;
+    }
+    tirx::StmtExprVisitor::VisitStmt_(op);
+    if (is_simt) {
+      --simt_depth_;
+    }
+  }
+
+  void VisitExpr_(const tirx::CallNode *op) final {
+    if (simt_depth_ > 0 && (op->op.same_as(tl::ascend_gemm_l1()) ||
+                            op->op.same_as(tl::ascend_blockscaled_gemm_l1()))) {
+      ICHECK(false) << "T.gemm cannot be used inside T.SimtVF";
+    }
+    tirx::StmtExprVisitor::VisitExpr_(op);
+  }
+
+  int simt_depth_ = 0;
+};
+
 void ValidateKernelCapabilities(const PrimFunc &func) {
+  GemmInSimtVFChecker::Check(func);
   bool has_cube_block = false;
   bool has_vector_block = false;
   bool has_gemm_l1 = false;
