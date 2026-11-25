@@ -1802,8 +1802,14 @@ bool CodeGenTileLangAscend::EmitAscendMemoryCall_(const CallNode *op) {
              op->op.same_as(tl::ascend_mad_mx())) {
     EmitMad_(op, op->op.same_as(tl::ascend_mad_mx()));
   } else if (op->op.same_as(tl::ascend_gemm_l1())) {
+    if (IsInsideSimtVF()) {
+      ICHECK(false) << "T.gemm cannot be used inside T.SimtVF";
+    }
     EmitGemmL1_(op);
   } else if (op->op.same_as(tl::ascend_blockscaled_gemm_l1())) {
+    if (IsInsideSimtVF()) {
+      ICHECK(false) << "T.gemm_blockscaled cannot be used inside T.SimtVF";
+    }
     EmitBlockscaledGemmL1_(op);
   } else {
     return false;
