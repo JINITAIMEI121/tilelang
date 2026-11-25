@@ -79,8 +79,10 @@ def dynamic_metadata(field: str, settings: dict[str, object] | None = None) -> s
         if backend:
             exts.append(backend)
 
-        # Add build date if TILELANG_BUILD_WHEEL_WITH_DATE is set
-        if _read_cmake_bool(os.environ.get("TILELANG_BUILD_WHEEL_WITH_DATE")):
+        # Add the build date by default: downstream consumers (e.g.
+        # tilelang.utils.version.build_date) expect a dYYYYMMDD label in the
+        # version string. Set TILELANG_BUILD_WHEEL_WITH_DATE=0 to opt out.
+        if _read_cmake_bool(os.environ.get("TILELANG_BUILD_WHEEL_WITH_DATE"), default=True):
             exts.append(f"d{time.strftime('%Y%m%d')}")
 
         if _read_cmake_bool(os.environ.get("NO_GIT_VERSION")):
