@@ -1818,6 +1818,9 @@ void CodeGenTileLangAscend::VisitExpr_(const CallNode *op, std::ostream &os) {
       LOG(FATAL) << simd_op_name << " can only be emitted inside SimdVF";
     }
   }
+  if (op->op.same_as(tvm::Op::Get("tirx.fmod"))) {
+    ICHECK(false) << "T.fmod has no lowering on the Ascend backend";
+  }
   if (op->op.same_as(builtin::bitwise_not()) && op->dtype.lanes() > 1) {
     RejectGenericVectorInSimd("bitwise Not", op->dtype);
     if (op->dtype.is_vector_bool() && op->dtype.lanes() <= 8) {
