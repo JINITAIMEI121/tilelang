@@ -612,8 +612,13 @@ def _validate_simd_arith_dtype(op_name, dtype):
     with "no matching function for call to asc_*" (deep compiler crash).
     """
     dtype_str = str(dtype)
-    reject_bf16_fp8 = op_name in ("vabs", "vneg", "vdiv", "vmull", "vmula", "vmadd", "vaddcs")
-    reject_fp8 = reject_bf16_fp8 or op_name in ("vmin", "vmax", "vmaxs", "vmins")
+    reject_bf16_fp8 = op_name in (
+        "vabs", "vneg", "vdiv", "vmull", "vmula", "vmadd", "vaddcs",
+        "vsqrt", "vln", "vrelu", "vexp",
+    )
+    reject_fp8 = reject_bf16_fp8 or op_name in (
+        "vnot", "vmin", "vmax", "vmaxs", "vmins",
+    )
     if "float8" in dtype_str and reject_fp8:
         raise ValueError(
             f"T.simd.{op_name} on the Ascend SimdVF path does not support "
@@ -906,6 +911,8 @@ def vshr(src0, src1, mask=None, mode="MODE_ZEROING"):
 def vexp(src, mask=None, mode="MODE_ZEROING", precision=None):
     if mask is None:
         mask = _default_mask(src.dtype)
+
+    _validate_simd_arith_dtype("vexp", src.dtype)
     annotations = None if precision is None else _precision_annotation("vexp", precision, dtype=src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vexp"), src, mask, mode, annotations=annotations)
 
@@ -913,6 +920,8 @@ def vexp(src, mask=None, mode="MODE_ZEROING", precision=None):
 def vln(src, mask=None, mode="MODE_ZEROING", precision=None):
     if mask is None:
         mask = _default_mask(src.dtype)
+
+    _validate_simd_arith_dtype("vln", src.dtype)
     annotations = None if precision is None else _precision_annotation("vln", precision, dtype=src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vln"), src, mask, mode, annotations=annotations)
 
@@ -920,6 +929,8 @@ def vln(src, mask=None, mode="MODE_ZEROING", precision=None):
 def vsqrt(src, mask=None, mode="MODE_ZEROING", precision=None):
     if mask is None:
         mask = _default_mask(src.dtype)
+
+    _validate_simd_arith_dtype("vsqrt", src.dtype)
     annotations = None if precision is None else _precision_annotation("vsqrt", precision, dtype=src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vsqrt"), src, mask, mode, annotations=annotations)
 
@@ -941,6 +952,8 @@ def vneg(src, mask=None, mode="MODE_ZEROING"):
 def vrelu(src, mask=None, mode="MODE_ZEROING"):
     if mask is None:
         mask = _default_mask(src.dtype)
+
+    _validate_simd_arith_dtype("vrelu", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vrelu"), src, mask, mode)
 
 
@@ -961,6 +974,8 @@ def vprelu(src0, src1, mask=None):
 def vnot(src, mask=None, mode="MODE_ZEROING"):
     if mask is None:
         mask = _default_mask(src.dtype)
+
+    _validate_simd_arith_dtype("vnot", src.dtype)
     return tirx.call_intrin(str(src.dtype), _Op("tl.simd.vnot"), src, mask, mode)
 
 
